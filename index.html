@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apryse WASM - Multi-Format PDF Converter & Merger</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Apryse WebViewer SDK (WASM Core) -->
+  <script src="https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public/webviewer.min.js"></script>
+
+  <style>
+    .drag-over {
+      border-color: #3b82f6 !important;
+      background-color: #eff6ff !important;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 font-sans">
+
+  <div class="max-w-4xl mx-auto py-10 px-4">
+    <!-- Header -->
+    <header class="mb-8 text-center">
+      <h1 class="text-3xl font-bold text-slate-900 tracking-tight">Document Converter & Merger</h1>
+      <p class="text-slate-600 mt-2 text-sm">
+        Powered by <span class="font-semibold text-blue-600">Apryse WebAssembly Core</span>
+      </p>
+      <div class="inline-flex items-center gap-2 mt-3 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-full text-xs font-medium">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+        High-Fidelity Arabic DOCX & RTL Page Preservation
+      </div>
+    </header>
+
+    <!-- Main Card -->
+    <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+      <!-- Dropzone -->
+      <div class="p-6">
+        <div id="dropzone" class="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer">
+          <div class="pointer-events-none">
+            <svg class="mx-auto h-12 w-12 text-slate-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+            </svg>
+            <p class="text-base font-medium text-slate-700">Drag & drop files here, or <span class="text-blue-600 underline pointer-events-auto">browse</span></p>
+            <p class="text-xs text-slate-500 mt-1">Supports DOCX, PDF, PNG, JPG, JPEG, WEBP</p>
+          </div>
+          <input type="file" id="fileInput" multiple accept=".docx,.doc,.pdf,.png,.jpg,.jpeg,.webp" class="hidden">
+        </div>
+      </div>
+
+      <!-- File Queue Header & Sort Controls -->
+      <div class="px-6 pb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100">
+        <h2 class="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+          Files Queue (<span id="fileCount">0</span>)
+        </h2>
+        
+        <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+          <div class="flex items-center gap-1.5 text-xs text-slate-500">
+            <span>Sort by:</span>
+            <select id="sortSelect" class="bg-slate-50 border border-slate-200 rounded px-2 py-1 text-slate-700 font-medium focus:outline-none focus:border-blue-500">
+              <option value="custom">Manual Order</option>
+              <option value="name">Name (A-Z)</option>
+              <option value="size">Size (Smallest)</option>
+              <option value="date">Date (Newest)</option>
+            </select>
+          </div>
+          <button id="clearBtn" class="text-xs text-red-600 hover:text-red-800 font-medium hidden">Clear All</button>
+        </div>
+      </div>
+
+      <!-- File Queue List -->
+      <div class="p-6 pt-3">
+        <div id="fileList" class="space-y-2 min-h-[100px] border border-slate-100 rounded-lg p-2 bg-slate-50/50">
+          <p id="emptyState" class="text-center text-sm text-slate-400 py-8">
+            No files added yet. Drop files above to rearrange and combine.
+          </p>
+        </div>
+      </div>
+
+      <!-- Actions Footer -->
+      <div class="bg-slate-50 px-6 py-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div id="engineStatus" class="text-xs font-medium text-slate-500 flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse" id="statusDot"></span>
+          <span id="statusText">Initializing WASM Core Engine...</span>
+        </div>
+
+        <button id="mergeBtn" disabled class="w-full sm:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-medium text-sm rounded-lg shadow-sm transition-all flex items-center justify-center gap-2">
+          <span>Convert & Combine to PDF</span>
+        </button>
+      </div>
+
+      <!-- Progress Bar -->
+      <div id="progressContainer" class="hidden w-full bg-slate-200 h-1.5">
+        <div id="progressBar" class="bg-blue-600 h-1.5 w-0 transition-all duration-300"></div>
+      </div>
+    </div>
+
+    <!-- Preview Card -->
+    <div id="outputCard" class="mt-8 bg-white rounded-xl shadow-md border border-slate-200 p-6 hidden">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-slate-900">Combined Result</h3>
+        <a id="downloadBtn" download="combined_document.pdf" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          Download Combined PDF
+        </a>
+      </div>
+      <iframe id="pdfPreview" class="w-full h-[500px] border border-slate-200 rounded-lg bg-slate-100"></iframe>
+    </div>
+
+    <!-- Hidden Viewer Container -->
+    <div id="viewer" class="hidden"></div>
+  </div>
+
+  <script>
+    let fileQueue = [];
+    let wvInstance = null;
+    let isCoreReady = false;
+
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const fileListEl = document.getElementById('fileList');
+    const fileCountEl = document.getElementById('fileCount');
+    const clearBtn = document.getElementById('clearBtn');
+    const sortSelect = document.getElementById('sortSelect');
+    const mergeBtn = document.getElementById('mergeBtn');
+    const emptyState = document.getElementById('emptyState');
+    const statusText = document.getElementById('statusText');
+    const statusDot = document.getElementById('statusDot');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressBar = document.getElementById('progressBar');
+    const outputCard = document.getElementById('outputCard');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const pdfPreview = document.getElementById('pdfPreview');
+
+    // 1. Initialize Apryse Headless Engine
+    WebViewer({
+      path: 'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public'
+    }, document.getElementById('viewer')).then(async (instance) => {
+      wvInstance = instance;
+      const { Core } = instance;
+
+      await Core.PDFNet.initialize();
+      Core.PDFNet.setResourcePath('https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public/core');
+
+      isCoreReady = true;
+      statusText.textContent = "Apryse WASM Core Engine Ready";
+      statusDot.className = "w-2 h-2 rounded-full bg-emerald-500";
+      updateBtnState();
+    }).catch(err => {
+      console.error("WASM Initialization Error:", err);
+      statusText.textContent = "Error loading WASM Core";
+      statusDot.className = "w-2 h-2 rounded-full bg-red-500";
+    });
+
+    // 2. Prevent default browser drops globally
+    window.addEventListener('dragover', (e) => e.preventDefault(), false);
+    window.addEventListener('drop', (e) => e.preventDefault(), false);
+
+    // 3. Robust Dropzone Event Handlers
+    dropzone.addEventListener('dragenter', (e) => { e.preventDefault(); e.stopPropagation(); dropzone.classList.add('drag-over'); });
+    dropzone.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); dropzone.classList.add('drag-over'); });
+    dropzone.addEventListener('dragleave', (e) => { e.preventDefault(); e.stopPropagation(); dropzone.classList.remove('drag-over'); });
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.remove('drag-over');
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handleFiles(e.dataTransfer.files);
+      }
+    });
+
+    dropzone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => { handleFiles(e.target.files); fileInput.value = ''; });
+    clearBtn.addEventListener('click', () => { fileQueue = []; renderQueue(); });
+
+    sortSelect.addEventListener('change', () => {
+      applySorting();
+      renderQueue();
+    });
+
+    // 4. File Queue Management & Sorting
+    function handleFiles(files) {
+      const validExtensions = ['docx', 'doc', 'pdf', 'png', 'jpg', 'jpeg', 'webp'];
+      Array.from(files).forEach(file => {
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (validExtensions.includes(ext)) {
+          fileQueue.push({
+            id: Math.random().toString(36).substr(2, 9),
+            file: file,
+            name: file.name,
+            ext: ext,
+            sizeBytes: file.size,
+            lastModified: file.lastModified,
+            size: (file.size / (1024 * 1024)).toFixed(2) + ' MB'
+          });
+        }
+      });
+      applySorting();
+      renderQueue();
+    }
+
+    function applySorting() {
+      const sortBy = sortSelect.value;
+      if (sortBy === 'name') {
+        fileQueue.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+      } else if (sortBy === 'size') {
+        fileQueue.sort((a, b) => a.sizeBytes - b.sizeBytes);
+      } else if (sortBy === 'date') {
+        fileQueue.sort((a, b) => b.lastModified - a.lastModified); // Newest first
+      }
+    }
+
+    function moveUp(index) {
+      if (index > 0) {
+        sortSelect.value = 'custom'; // switch back to manual sorting mode
+        [fileQueue[index], fileQueue[index - 1]] = [fileQueue[index - 1], fileQueue[index]];
+        renderQueue();
+      }
+    }
+
+    function moveDown(index) {
+      if (index < fileQueue.length - 1) {
+        sortSelect.value = 'custom'; // switch back to manual sorting mode
+        [fileQueue[index], fileQueue[index + 1]] = [fileQueue[index + 1], fileQueue[index]];
+        renderQueue();
+      }
+    }
+
+    function removeFile(index) {
+      fileQueue.splice(index, 1);
+      renderQueue();
+    }
+
+    function getBadgeClass(ext) {
+      if (ext === 'pdf') return 'bg-red-100 text-red-700 border-red-200';
+      if (['docx', 'doc'].includes(ext)) return 'bg-blue-100 text-blue-700 border-blue-200';
+      return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    }
+
+    function renderQueue() {
+      fileCountEl.textContent = fileQueue.length;
+
+      if (fileQueue.length === 0) {
+        emptyState.classList.remove('hidden');
+        clearBtn.classList.add('hidden');
+        fileListEl.innerHTML = '';
+        fileListEl.appendChild(emptyState);
+      } else {
+        emptyState.classList.add('hidden');
+        clearBtn.classList.remove('hidden');
+        fileListEl.innerHTML = '';
+
+        fileQueue.forEach((item, index) => {
+          const itemEl = document.createElement('div');
+          itemEl.className = 'flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg shadow-sm';
+
+          itemEl.innerHTML = `
+            <div class="flex items-center gap-3 min-w-0">
+              <span class="text-xs font-bold text-slate-400 w-5 text-center">${index + 1}</span>
+              <span class="px-2 py-0.5 text-xs font-semibold uppercase rounded border ${getBadgeClass(item.ext)}">
+                ${item.ext}
+              </span>
+              <div class="truncate">
+                <p class="text-sm font-medium text-slate-800 truncate">${item.name}</p>
+                <p class="text-xs text-slate-400">${item.size}</p>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-1">
+              <button onclick="moveUp(${index})" ${index === 0 ? 'disabled' : ''} class="p-1.5 text-slate-500 hover:text-blue-600 disabled:opacity-30 rounded hover:bg-slate-100" title="Move Up">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+              </button>
+              <button onclick="moveDown(${index})" ${index === fileQueue.length - 1 ? 'disabled' : ''} class="p-1.5 text-slate-500 hover:text-blue-600 disabled:opacity-30 rounded hover:bg-slate-100" title="Move Down">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+              </button>
+              <button onclick="removeFile(${index})" class="p-1.5 text-slate-400 hover:text-red-600 rounded hover:bg-red-50 ml-1" title="Remove">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              </button>
+            </div>
+          `;
+          fileListEl.appendChild(itemEl);
+        });
+      }
+
+      updateBtnState();
+    }
+
+    function updateBtnState() {
+      mergeBtn.disabled = !isCoreReady || fileQueue.length === 0;
+    }
+
+    // 5. WASM Conversion Pipeline
+    mergeBtn.addEventListener('click', async () => {
+      if (!isCoreReady || fileQueue.length === 0) return;
+
+      try {
+        mergeBtn.disabled = true;
+        progressContainer.classList.remove('hidden');
+        outputCard.classList.add('hidden');
+        updateProgress(5, "Starting conversion...");
+
+        const { Core } = wvInstance;
+        const masterDoc = await Core.PDFNet.PDFDoc.create();
+        await masterDoc.initSecurityHandler();
+        await masterDoc.lock();
+
+        const totalFiles = fileQueue.length;
+
+        for (let i = 0; i < totalFiles; i++) {
+          const item = fileQueue[i];
+          updateProgress(Math.round(((i + 1) / totalFiles) * 80), `Converting ${i + 1}/${totalFiles}: ${item.name}`);
+
+          let subDoc = null;
+
+          if (item.ext === 'pdf') {
+            const arrayBuffer = await item.file.arrayBuffer();
+            subDoc = await Core.PDFNet.PDFDoc.createFromBuffer(arrayBuffer);
+          } else if (['docx', 'doc'].includes(item.ext)) {
+            const pdfBuffer = await Core.officeToPDFBuffer(item.file, { extension: item.ext });
+            subDoc = await Core.PDFNet.PDFDoc.createFromBuffer(pdfBuffer);
+          } else if (['png', 'jpg', 'jpeg', 'webp'].includes(item.ext)) {
+            subDoc = await Core.PDFNet.PDFDoc.create();
+            await Core.PDFNet.Convert.toPdf(subDoc, item.file);
+          }
+
+          if (subDoc) {
+            const pageCount = await subDoc.getPageCount();
+            const masterPageCount = await masterDoc.getPageCount();
+            await masterDoc.insertPages(masterPageCount + 1, subDoc, 1, pageCount, Core.PDFNet.PDFDoc.InsertFlag.e_none);
+          }
+        }
+
+        updateProgress(90, "Saving compiled document...");
+        const pdfData = await masterDoc.saveMemoryFromBuffer(Core.PDFNet.SDFDoc.SaveOptions.e_linearized);
+        const blob = new Blob([pdfData], { type: 'application/pdf' });
+        const pdfUrl = URL.createObjectURL(blob);
+
+        updateProgress(100, "Done!");
+        downloadBtn.href = pdfUrl;
+        pdfPreview.src = pdfUrl;
+        outputCard.classList.remove('hidden');
+
+      } catch (error) {
+        console.error("Conversion error:", error);
+        alert("Error during conversion: " + error.message);
+      } finally {
+        mergeBtn.disabled = false;
+        setTimeout(() => progressContainer.classList.add('hidden'), 1000);
+      }
+    });
+
+    function updateProgress(percent, text) {
+      progressBar.style.width = percent + '%';
+      statusText.textContent = text;
+    }
+  </script>
+</body>
+</html>
