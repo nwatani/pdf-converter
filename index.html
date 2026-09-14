@@ -111,7 +111,8 @@
 
   <!-- Application Logic (ES Module) -->
   <script type="module">
-    import WebViewer from 'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/+esm';
+    import WebViewerModule from 'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/+esm';
+    const WebViewer = WebViewerModule.default || WebViewerModule;
 
     let fileQueue = [];
     let wvInstance = null;
