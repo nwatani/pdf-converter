@@ -5,10 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Apryse WASM - Multi-Format PDF Converter & Merger</title>
 
-  <!-- Inline favicon to prevent 404 on GitHub Pages -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📄</text></svg>">
 
-  <!-- Tailwind CSS (versioned Play CDN) -->
   <script src="https://cdn.tailwindcss.com/3.4.16"></script>
 
   <style>
@@ -21,7 +19,6 @@
 <body class="bg-slate-100 min-h-screen text-slate-800 font-sans">
 
   <div class="max-w-4xl mx-auto py-10 px-4">
-    <!-- Header -->
     <header class="mb-8 text-center">
       <h1 class="text-3xl font-bold text-slate-900 tracking-tight">Document Converter & Merger</h1>
       <p class="text-slate-600 mt-2 text-sm">
@@ -33,9 +30,7 @@
       </div>
     </header>
 
-    <!-- Main Card -->
     <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
-      <!-- Dropzone -->
       <div class="p-6">
         <div id="dropzone" class="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer">
           <div class="pointer-events-none">
@@ -49,12 +44,10 @@
         </div>
       </div>
 
-      <!-- File Queue Header & Sort Controls -->
       <div class="px-6 pb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100">
         <h2 class="text-sm font-semibold text-slate-700 uppercase tracking-wider">
           Files Queue (<span id="fileCount">0</span>)
         </h2>
-
         <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
           <div class="flex items-center gap-1.5 text-xs text-slate-500">
             <span>Sort by:</span>
@@ -64,15 +57,12 @@
               <option value="size">Size</option>
               <option value="date">Date</option>
             </select>
-            <button id="sortOrderBtn" title="Toggle Ascending / Descending" class="p-1 bg-slate-50 border border-slate-200 rounded text-slate-600 hover:bg-slate-100 font-bold text-xs flex items-center justify-center w-6 h-6">
-              ↑
-            </button>
+            <button id="sortOrderBtn" title="Toggle Ascending / Descending" class="p-1 bg-slate-50 border border-slate-200 rounded text-slate-600 hover:bg-slate-100 font-bold text-xs flex items-center justify-center w-6 h-6">↑</button>
           </div>
           <button id="clearBtn" class="text-xs text-red-600 hover:text-red-800 font-medium hidden">Clear All</button>
         </div>
       </div>
 
-      <!-- File Queue List -->
       <div class="p-6 pt-3">
         <div id="fileList" class="space-y-2 min-h-[100px] border border-slate-100 rounded-lg p-2 bg-slate-50/50">
           <p id="emptyState" class="text-center text-sm text-slate-400 py-8">
@@ -81,25 +71,21 @@
         </div>
       </div>
 
-      <!-- Actions Footer -->
       <div class="bg-slate-50 px-6 py-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div id="engineStatus" class="text-xs font-medium text-slate-500 flex items-center gap-2">
           <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse" id="statusDot"></span>
           <span id="statusText">Initializing WASM Core Engine...</span>
         </div>
-
         <button id="mergeBtn" disabled class="w-full sm:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-medium text-sm rounded-lg shadow-sm transition-all flex items-center justify-center gap-2">
           <span>Convert & Combine to PDF</span>
         </button>
       </div>
 
-      <!-- Progress Bar -->
       <div id="progressContainer" class="hidden w-full bg-slate-200 h-1.5">
         <div id="progressBar" class="bg-blue-600 h-1.5 w-0 transition-all duration-300"></div>
       </div>
     </div>
 
-    <!-- Preview Card -->
     <div id="outputCard" class="mt-8 bg-white rounded-xl shadow-md border border-slate-200 p-6 hidden">
       <div class="flex items-center justify-between mb-4">
         <h3 class="text-lg font-bold text-slate-900">Combined Result</h3>
@@ -111,16 +97,37 @@
       <iframe id="pdfPreview" class="w-full h-[500px] border border-slate-200 rounded-lg bg-slate-100"></iframe>
     </div>
 
-    <!-- Hidden Viewer Container -->
     <div id="viewer" class="hidden"></div>
   </div>
 
-  <!-- Application Logic (ES Module) -->
+  <!-- ============================================================
+       CLEANUP: Unregister any leftover service workers from
+       previous versions of this page. Runs every load.
+       ============================================================ -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        if (regs.length > 0) {
+          console.log('[Cleanup] Unregistering', regs.length, 'old service worker(s)...');
+          Promise.all(regs.map(r => r.unregister())).then(() => {
+            console.log('[Cleanup] Done. Page will now reload to escape cross-origin isolation.');
+            // Only reload if we were in an isolated state caused by the SW
+            if (window.crossOriginIsolated) {
+              window.location.reload();
+            }
+          });
+        } else {
+          console.log('[Cleanup] No service workers registered. Clean.');
+        }
+      });
+    }
+  </script>
+
+  <!-- Application Logic -->
   <script type="module">
     import WebViewerModule from 'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/+esm';
     const WebViewer = WebViewerModule.default || WebViewerModule;
 
-    // ---- App state ----
     let fileQueue = [];
     let wvInstance = null;
     let isCoreReady = false;
@@ -143,12 +150,9 @@
     const downloadBtn = document.getElementById('downloadBtn');
     const pdfPreview = document.getElementById('pdfPreview');
 
-    // ---- Log environment ----
     console.log('[Env] crossOriginIsolated =', window.crossOriginIsolated);
-    console.log('[Env] WebViewer global =', typeof WebViewer);
-    console.log('[Env] User agent =', navigator.userAgent);
+    console.log('[Env] WebViewer typeof =', typeof WebViewer);
 
-    // ---- Initialize Apryse ----
     async function initWebViewer() {
       try {
         if (typeof WebViewer !== 'function') {
@@ -157,23 +161,18 @@
 
         console.log('Starting WebViewer instantiation...');
 
-        // 60-second safety timeout so we never hang forever
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('WebViewer init timed out after 60s')), 60000)
-        );
-
         const viewerContainer = document.getElementById('viewer');
 
-        const initPromise = WebViewer(
+        const instance = await WebViewer(
           {
             path: 'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public',
             initialDoc: '',
-            disabledElements: ['header']
+            disabledElements: ['header'],
+            // Force single-threaded WASM — no COI needed, works on GitHub Pages out of the box
+            enableWasmThreads: false
           },
           viewerContainer
         );
-
-        const instance = await Promise.race([initPromise, timeoutPromise]);
 
         wvInstance = instance;
         const { Core } = instance;
@@ -200,7 +199,6 @@
 
     initWebViewer();
 
-    // ---- Drag & drop wiring ----
     window.addEventListener('dragover', (e) => e.preventDefault(), false);
     window.addEventListener('drop', (e) => e.preventDefault(), false);
 
@@ -228,7 +226,6 @@
       renderQueue();
     });
 
-    // ---- File handling ----
     function handleFiles(files) {
       const validExtensions = ['docx', 'doc', 'pdf', 'png', 'jpg', 'jpeg', 'webp'];
       Array.from(files).forEach(file => {
@@ -236,9 +233,7 @@
         if (validExtensions.includes(ext)) {
           fileQueue.push({
             id: Math.random().toString(36).substr(2, 9),
-            file: file,
-            name: file.name,
-            ext: ext,
+            file, name: file.name, ext,
             sizeBytes: file.size,
             lastModified: file.lastModified,
             size: (file.size / (1024 * 1024)).toFixed(2) + ' MB'
@@ -261,37 +256,33 @@
       });
     }
 
-    window.moveUp = function(index) {
-      if (index > 0) {
+    window.moveUp = function(i) {
+      if (i > 0) {
         sortSelect.value = 'custom';
-        [fileQueue[index], fileQueue[index - 1]] = [fileQueue[index - 1], fileQueue[index]];
+        [fileQueue[i], fileQueue[i - 1]] = [fileQueue[i - 1], fileQueue[i]];
         renderQueue();
       }
     };
-    window.moveDown = function(index) {
-      if (index < fileQueue.length - 1) {
+    window.moveDown = function(i) {
+      if (i < fileQueue.length - 1) {
         sortSelect.value = 'custom';
-        [fileQueue[index], fileQueue[index + 1]] = [fileQueue[index + 1], fileQueue[index]];
+        [fileQueue[i], fileQueue[i + 1]] = [fileQueue[i + 1], fileQueue[i]];
         renderQueue();
       }
     };
-    window.removeFile = function(index) { fileQueue.splice(index, 1); renderQueue(); };
+    window.removeFile = function(i) { fileQueue.splice(i, 1); renderQueue(); };
 
     function getBadgeClass(ext) {
       if (ext === 'pdf') return 'bg-red-100 text-red-700 border-red-200';
       if (['docx', 'doc'].includes(ext)) return 'bg-blue-100 text-blue-700 border-blue-200';
       return 'bg-emerald-100 text-emerald-700 border-emerald-200';
     }
-
     function escapeHtml(str) {
-      return String(str)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }
 
     function renderQueue() {
       fileCountEl.textContent = fileQueue.length;
-
       if (fileQueue.length === 0) {
         emptyState.classList.remove('hidden');
         clearBtn.classList.add('hidden');
@@ -301,11 +292,10 @@
         emptyState.classList.add('hidden');
         clearBtn.classList.remove('hidden');
         fileListEl.innerHTML = '';
-
         fileQueue.forEach((item, index) => {
-          const itemEl = document.createElement('div');
-          itemEl.className = 'flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg shadow-sm';
-          itemEl.innerHTML = `
+          const el = document.createElement('div');
+          el.className = 'flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg shadow-sm';
+          el.innerHTML = `
             <div class="flex items-center gap-3 min-w-0">
               <span class="text-xs font-bold text-slate-400 w-5 text-center">${index + 1}</span>
               <span class="px-2 py-0.5 text-xs font-semibold uppercase rounded border ${getBadgeClass(item.ext)}">${item.ext}</span>
@@ -325,7 +315,7 @@
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
               </button>
             </div>`;
-          fileListEl.appendChild(itemEl);
+          fileListEl.appendChild(el);
         });
       }
       updateBtnState();
@@ -335,7 +325,6 @@
       mergeBtn.disabled = !isCoreReady || fileQueue.length === 0;
     }
 
-    // ---- Conversion ----
     mergeBtn.addEventListener('click', async () => {
       if (!isCoreReady || fileQueue.length === 0) return;
       try {
@@ -356,7 +345,6 @@
           updateProgress(Math.round(((i + 1) / totalFiles) * 80), `Converting ${i + 1}/${totalFiles}: ${item.name}`);
 
           let subDoc = null;
-
           if (item.ext === 'pdf') {
             const buf = await item.file.arrayBuffer();
             subDoc = await Core.PDFNet.PDFDoc.createFromBuffer(buf);
@@ -370,7 +358,6 @@
             const imgBuf = await item.file.arrayBuffer();
             await Core.PDFNet.Convert.toPdf(subDoc, imgBuf);
           }
-
           if (subDoc) {
             const pageCount = await subDoc.getPageCount();
             const masterPageCount = await masterDoc.getPageCount();
