@@ -8,7 +8,7 @@
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Apryse WebViewer SDK (WASM Core) -->
+  <!-- Apryse WebViewer SDK (Universal UMD Bundle for Script Tags) -->
   <script src="https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public/webviewer.min.js"></script>
 
   <style>
@@ -134,23 +134,25 @@
     const pdfPreview = document.getElementById('pdfPreview');
 
     // 1. Initialize Apryse Headless Engine
-    WebViewer({
-      path: 'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public'
-    }, document.getElementById('viewer')).then(async (instance) => {
-      wvInstance = instance;
-      const { Core } = instance;
+    window.addEventListener('DOMContentLoaded', () => {
+      WebViewer({
+        path: 'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public'
+      }, document.getElementById('viewer')).then(async (instance) => {
+        wvInstance = instance;
+        const { Core } = instance;
 
-      await Core.PDFNet.initialize();
-      Core.PDFNet.setResourcePath('https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public/core');
+        await Core.PDFNet.initialize();
+        Core.PDFNet.setResourcePath('https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public/core');
 
-      isCoreReady = true;
-      statusText.textContent = "Apryse WASM Core Engine Ready";
-      statusDot.className = "w-2 h-2 rounded-full bg-emerald-500";
-      updateBtnState();
-    }).catch(err => {
-      console.error("WASM Initialization Error:", err);
-      statusText.textContent = "Error loading WASM Core";
-      statusDot.className = "w-2 h-2 rounded-full bg-red-500";
+        isCoreReady = true;
+        statusText.textContent = "Apryse WASM Core Engine Ready";
+        statusDot.className = "w-2 h-2 rounded-full bg-emerald-500";
+        updateBtnState();
+      }).catch(err => {
+        console.error("WASM Initialization Error:", err);
+        statusText.textContent = "Error loading WASM Core";
+        statusDot.className = "w-2 h-2 rounded-full bg-red-500";
+      });
     });
 
     // 2. Prevent default browser drops globally
@@ -207,13 +209,13 @@
       } else if (sortBy === 'size') {
         fileQueue.sort((a, b) => a.sizeBytes - b.sizeBytes);
       } else if (sortBy === 'date') {
-        fileQueue.sort((a, b) => b.lastModified - a.lastModified); // Newest first
+        fileQueue.sort((a, b) => b.lastModified - a.lastModified);
       }
     }
 
     function moveUp(index) {
       if (index > 0) {
-        sortSelect.value = 'custom'; // switch back to manual sorting mode
+        sortSelect.value = 'custom';
         [fileQueue[index], fileQueue[index - 1]] = [fileQueue[index - 1], fileQueue[index]];
         renderQueue();
       }
@@ -221,7 +223,7 @@
 
     function moveDown(index) {
       if (index < fileQueue.length - 1) {
-        sortSelect.value = 'custom'; // switch back to manual sorting mode
+        sortSelect.value = 'custom';
         [fileQueue[index], fileQueue[index + 1]] = [fileQueue[index + 1], fileQueue[index]];
         renderQueue();
       }
