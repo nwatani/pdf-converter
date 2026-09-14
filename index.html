@@ -21,7 +21,34 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📄</text></svg>">
 
   <!-- Cross-Origin Isolation Service Worker (REQUIRED for Apryse WASM threads on GitHub Pages) -->
-  <script src="coi-serviceworker.js"></script>
+  <script>
+  // Only load the COI service worker on browsers that fully support credentialless iframes
+  // (Chrome, Edge, and Firefox 119+). Older Firefox versions will fall back to
+  // single-threaded WASM instead of being blocked by COEP.
+  (function() {
+    const ua = navigator.userAgent;
+    const isFirefox = /firefox\/\d+/i.test(ua);
+    let firefoxMajor = 0;
+    if (isFirefox) {
+      const m = ua.match(/firefox\/(\d+)/i);
+      if (m) firefoxMajor = parseInt(m[1], 10);
+    }
+
+    const shouldLoadCOI = !isFirefox || firefoxMajor >= 119;
+
+    if (shouldLoadCOI) {
+      const s = document.createElement('script');
+      s.src = 'coi-serviceworker.js';
+      document.head.appendChild(s);
+      console.log('[COI] Service worker enabled (cross-origin isolation active)');
+    } else {
+      console.warn(
+        '[COI] Firefox < 119 detected. Skipping service worker to avoid COEP blocking the WebViewer iframe.\n' +
+        'Apryse will run in single-threaded mode (slower but functional).'
+      );
+    }
+  })();
+</script>
 
   <!-- Tailwind CSS (versioned Play CDN) -->
   <script src="https://cdn.tailwindcss.com/3.4.16"></script>
