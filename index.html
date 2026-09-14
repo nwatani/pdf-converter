@@ -57,10 +57,13 @@
             <span>Sort by:</span>
             <select id="sortSelect" class="bg-slate-50 border border-slate-200 rounded px-2 py-1 text-slate-700 font-medium focus:outline-none focus:border-blue-500">
               <option value="custom">Manual Order</option>
-              <option value="name">Name (A-Z)</option>
-              <option value="size">Size (Smallest)</option>
-              <option value="date">Date (Newest)</option>
+              <option value="name">Name</option>
+              <option value="size">Size</option>
+              <option value="date">Date</option>
             </select>
+            <button id="sortOrderBtn" title="Toggle Ascending / Descending" class="p-1 bg-slate-50 border border-slate-200 rounded text-slate-600 hover:bg-slate-100 font-bold text-xs flex items-center justify-center w-6 h-6">
+              ↑
+            </button>
           </div>
           <button id="clearBtn" class="text-xs text-red-600 hover:text-red-800 font-medium hidden">Clear All</button>
         </div>
@@ -117,6 +120,7 @@
     let fileQueue = [];
     let wvInstance = null;
     let isCoreReady = false;
+    let sortAscending = true;
 
     const dropzone = document.getElementById('dropzone');
     const fileInput = document.getElementById('fileInput');
@@ -124,6 +128,7 @@
     const fileCountEl = document.getElementById('fileCount');
     const clearBtn = document.getElementById('clearBtn');
     const sortSelect = document.getElementById('sortSelect');
+    const sortOrderBtn = document.getElementById('sortOrderBtn');
     const mergeBtn = document.getElementById('mergeBtn');
     const emptyState = document.getElementById('emptyState');
     const statusText = document.getElementById('statusText');
@@ -134,9 +139,10 @@
     const downloadBtn = document.getElementById('downloadBtn');
     const pdfPreview = document.getElementById('pdfPreview');
 
-    // 1. Initialize Apryse Headless Engine
+    // 1. Initialize Apryse Headless Engine with step logging
     async function initWebViewer() {
       try {
+        console.log("Starting WebViewer instantiation...");
         const instance = await WebViewer({
           path: 'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public',
           initialDoc: '',
@@ -146,16 +152,20 @@
         wvInstance = instance;
         const { Core } = instance;
 
+        console.log("Initializing PDFNet...");
         await Core.PDFNet.initialize();
+        
+        console.log("Setting resource path...");
         Core.PDFNet.setResourcePath('https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public/core');
 
         isCoreReady = true;
         statusText.textContent = "Apryse WASM Core Engine Ready";
         statusDot.className = "w-2 h-2 rounded-full bg-emerald-500";
         updateBtnState();
+        console.log("WASM Core Engine Ready successfully!");
       } catch (err) {
-        console.error("WASM Initialization Error:", err);
-        statusText.textContent = "Error loading WASM Core";
+        console.error("WASM Initialization Detailed Error:", err);
+        statusText.textContent = "Error: " + (err.message || "Failed to load WASM Core");
         statusDot.className = "w-2 h-2 rounded-full bg-red-500";
       }
     }
@@ -188,7 +198,14 @@
       renderQueue();
     });
 
-    // 4. File Queue Management & Sorting
+    sortOrderBtn.addEventListener('click', () => {
+      sortAscending = !sortAscending;
+      sortOrderBtn.textContent = sortAscending ? '↑' : '↓';
+      applySorting();
+      renderQueue();
+    });
+
+    // 4. File Queue Management & Sorting (Ascending/Descending support)
     function handleFiles(files) {
       const validExtensions = ['docx', 'doc', 'pdf', 'png', 'jpg', 'jpeg', 'webp'];
       Array.from(files).forEach(file => {
@@ -211,13 +228,19 @@
 
     function applySorting() {
       const sortBy = sortSelect.value;
-      if (sortBy === 'name') {
-        fileQueue.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
-      } else if (sortBy === 'size') {
-        fileQueue.sort((a, b) => a.sizeBytes - b.sizeBytes);
-      } else if (sortBy === 'date') {
-        fileQueue.sort((a, b) => b.lastModified - a.lastModified);
-      }
+      if (sortBy === 'custom') return;
+
+      fileQueue.sort((a, b) => {
+        let comparison = 0;
+        if (sortBy === 'name') {
+          comparison = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+        } else if (sortBy === 'size') {
+          comparison = a.sizeBytes - b.sizeBytes;
+        } else if (sortBy === 'date') {
+          comparison = a.lastModified - b.lastModified;
+        }
+        return sortAscending ? comparison : -comparison;
+      });
     }
 
     // Expose array mutation functions globally so HTML inline onclick handlers can access them
