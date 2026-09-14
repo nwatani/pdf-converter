@@ -5,25 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Apryse WASM - Multi-Format PDF Converter & Merger</title>
 
-  <!-- Content Security Policy -->
-  <meta http-equiv="Content-Security-Policy" content="
-    default-src 'self';
-    script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdn.tailwindcss.com https://cdn.jsdelivr.net;
-    style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com;
-    img-src 'self' data: blob:;
-    font-src 'self' data: blob:;
-    connect-src 'self' blob: data: https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://www.pdftron.com https://pws-collect.pdftron.com https://proxy.pdftron.com;
-    frame-src 'self' blob: https://cdn.jsdelivr.net;
-    worker-src 'self' blob:;
-  ">
-
-  <!-- Inline favicon -->
+  <!-- Inline favicon to prevent 404 on GitHub Pages -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📄</text></svg>">
 
-  <!-- Direct script inclusion so coi-serviceworker can correctly resolve document.currentScript -->
-  <script src="coi-serviceworker.js"></script>
-
-  <!-- Tailwind CSS -->
+  <!-- Tailwind CSS (versioned Play CDN) -->
   <script src="https://cdn.tailwindcss.com/3.4.16"></script>
 
   <style>
@@ -130,11 +115,11 @@
     <div id="viewer" class="hidden"></div>
   </div>
 
-  <!-- Application Logic (ES Module) -->
-  <script type="module">
-    import WebViewerModule from 'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/+esm';
-    const WebViewer = WebViewerModule.default || WebViewerModule;
+  <!-- Load WebViewer via classic script tag (more reliable than ESM import) -->
+  <script src="https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public/webviewer.min.js"></script>
 
+  <script>
+    // ---- App state ----
     let fileQueue = [];
     let wvInstance = null;
     let isCoreReady = false;
@@ -157,63 +142,68 @@
     const downloadBtn = document.getElementById('downloadBtn');
     const pdfPreview = document.getElementById('pdfPreview');
 
+    // ---- Log environment ----
     console.log('[Env] crossOriginIsolated =', window.crossOriginIsolated);
+    console.log('[Env] User agent =', navigator.userAgent);
 
+    // ---- Initialize Apryse ----
     async function initWebViewer() {
       try {
-        console.log("Starting WebViewer instantiation...");
+        if (typeof WebViewer === 'undefined') {
+          throw new Error('WebViewer failed to load from CDN. Check your network or CSP.');
+        }
+
+        console.log('Starting WebViewer instantiation...');
+
+        // 60-second safety timeout so we never hang forever
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('WebViewer init timed out after 60s')), 60000)
+        );
 
         const viewerContainer = document.getElementById('viewer');
 
-        // Watch for the WebViewer iframe and set credentialless for cross-origin isolation
-        const iframeObserver = new MutationObserver(() => {
-          const iframe = viewerContainer.querySelector('iframe');
-          if (iframe && !iframe.credentialless) {
-            iframe.credentialless = true;
-            console.log('[Fix] WebViewer iframe set to credentialless');
-            iframeObserver.disconnect();
-          }
-        });
-        iframeObserver.observe(viewerContainer, { childList: true, subtree: true });
+        const initPromise = WebViewer(
+          {
+            path: 'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public',
+            initialDoc: '',
+            disabledElements: ['header']
+          },
+          viewerContainer
+        );
 
-        // Standard configuration using local public folder or CDN fallback
-        const instance = await WebViewer({
-          path: 'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public',
-          licenseKey: 'YOUR_APRYSE_LICENSE_KEY', // Replace with your Apryse key if applicable
-          initialDoc: '',
-          disabledElements: ['header']
-        }, viewerContainer);
+        const instance = await Promise.race([initPromise, timeoutPromise]);
 
         wvInstance = instance;
         const { Core } = instance;
 
-        console.log("Initializing PDFNet...");
+        console.log('Initializing PDFNet...');
         await Core.PDFNet.initialize();
 
-        console.log("Setting resource path...");
-        Core.PDFNet.setResourcePath('https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public/core');
+        console.log('Setting resource path...');
+        Core.PDFNet.setResourcePath(
+          'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public/core'
+        );
 
         isCoreReady = true;
-        statusText.textContent = "Apryse WASM Core Engine Ready";
-        statusDot.className = "w-2 h-2 rounded-full bg-emerald-500";
+        statusText.textContent = 'Apryse WASM Core Engine Ready';
+        statusDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
         updateBtnState();
-        console.log("WASM Core Engine Ready successfully!");
+        console.log('WASM Core Engine Ready successfully!');
       } catch (err) {
-        console.error("WASM Initialization Detailed Error:", err);
-        statusText.textContent = "Error: " + (err.message || "Failed to load WASM Core");
-        statusDot.className = "w-2 h-2 rounded-full bg-red-500";
+        console.error('WASM Initialization Detailed Error:', err);
+        statusText.textContent = 'Error: ' + (err.message || 'Failed to load WASM Core');
+        statusDot.className = 'w-2 h-2 rounded-full bg-red-500';
       }
     }
 
     initWebViewer();
 
-    // Prevent default browser drops globally
+    // ---- Drag & drop wiring ----
     window.addEventListener('dragover', (e) => e.preventDefault(), false);
     window.addEventListener('drop', (e) => e.preventDefault(), false);
 
-    // Dropzone Event Handlers
     dropzone.addEventListener('dragenter', (e) => { e.preventDefault(); e.stopPropagation(); dropzone.classList.add('drag-over'); });
-    dropzone.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); dropzone.classList.add('drag-over'); });
+    dropzone.addEventListener('dragover',  (e) => { e.preventDefault(); e.stopPropagation(); dropzone.classList.add('drag-over'); });
     dropzone.addEventListener('dragleave', (e) => { e.preventDefault(); e.stopPropagation(); dropzone.classList.remove('drag-over'); });
     dropzone.addEventListener('drop', (e) => {
       e.preventDefault();
@@ -228,11 +218,7 @@
     fileInput.addEventListener('change', (e) => { handleFiles(e.target.files); fileInput.value = ''; });
     clearBtn.addEventListener('click', () => { fileQueue = []; renderQueue(); });
 
-    sortSelect.addEventListener('change', () => {
-      applySorting();
-      renderQueue();
-    });
-
+    sortSelect.addEventListener('change', () => { applySorting(); renderQueue(); });
     sortOrderBtn.addEventListener('click', () => {
       sortAscending = !sortAscending;
       sortOrderBtn.textContent = sortAscending ? '↑' : '↓';
@@ -240,6 +226,7 @@
       renderQueue();
     });
 
+    // ---- File handling ----
     function handleFiles(files) {
       const validExtensions = ['docx', 'doc', 'pdf', 'png', 'jpg', 'jpeg', 'webp'];
       Array.from(files).forEach(file => {
@@ -263,17 +250,12 @@
     function applySorting() {
       const sortBy = sortSelect.value;
       if (sortBy === 'custom') return;
-
       fileQueue.sort((a, b) => {
-        let comparison = 0;
-        if (sortBy === 'name') {
-          comparison = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
-        } else if (sortBy === 'size') {
-          comparison = a.sizeBytes - b.sizeBytes;
-        } else if (sortBy === 'date') {
-          comparison = a.lastModified - b.lastModified;
-        }
-        return sortAscending ? comparison : -comparison;
+        let c = 0;
+        if (sortBy === 'name')  c = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+        if (sortBy === 'size')  c = a.sizeBytes - b.sizeBytes;
+        if (sortBy === 'date')  c = a.lastModified - b.lastModified;
+        return sortAscending ? c : -c;
       });
     }
 
@@ -283,20 +265,15 @@
         [fileQueue[index], fileQueue[index - 1]] = [fileQueue[index - 1], fileQueue[index]];
         renderQueue();
       }
-    }
-
+    };
     window.moveDown = function(index) {
       if (index < fileQueue.length - 1) {
         sortSelect.value = 'custom';
         [fileQueue[index], fileQueue[index + 1]] = [fileQueue[index + 1], fileQueue[index]];
         renderQueue();
       }
-    }
-
-    window.removeFile = function(index) {
-      fileQueue.splice(index, 1);
-      renderQueue();
-    }
+    };
+    window.removeFile = function(index) { fileQueue.splice(index, 1); renderQueue(); };
 
     function getBadgeClass(ext) {
       if (ext === 'pdf') return 'bg-red-100 text-red-700 border-red-200';
@@ -306,11 +283,8 @@
 
     function escapeHtml(str) {
       return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
     function renderQueue() {
@@ -329,19 +303,15 @@
         fileQueue.forEach((item, index) => {
           const itemEl = document.createElement('div');
           itemEl.className = 'flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg shadow-sm';
-
           itemEl.innerHTML = `
             <div class="flex items-center gap-3 min-w-0">
               <span class="text-xs font-bold text-slate-400 w-5 text-center">${index + 1}</span>
-              <span class="px-2 py-0.5 text-xs font-semibold uppercase rounded border ${getBadgeClass(item.ext)}">
-                ${item.ext}
-              </span>
+              <span class="px-2 py-0.5 text-xs font-semibold uppercase rounded border ${getBadgeClass(item.ext)}">${item.ext}</span>
               <div class="truncate">
                 <p class="text-sm font-medium text-slate-800 truncate">${escapeHtml(item.name)}</p>
                 <p class="text-xs text-slate-400">${item.size}</p>
               </div>
             </div>
-
             <div class="flex items-center gap-1">
               <button type="button" onclick="window.moveUp(${index})" ${index === 0 ? 'disabled' : ''} class="p-1.5 text-slate-500 hover:text-blue-600 disabled:opacity-30 rounded hover:bg-slate-100" title="Move Up">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
@@ -352,12 +322,10 @@
               <button type="button" onclick="window.removeFile(${index})" class="p-1.5 text-slate-400 hover:text-red-600 rounded hover:bg-red-50 ml-1" title="Remove">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
               </button>
-            </div>
-          `;
+            </div>`;
           fileListEl.appendChild(itemEl);
         });
       }
-
       updateBtnState();
     }
 
@@ -365,15 +333,14 @@
       mergeBtn.disabled = !isCoreReady || fileQueue.length === 0;
     }
 
-    // WASM Conversion Pipeline
+    // ---- Conversion ----
     mergeBtn.addEventListener('click', async () => {
       if (!isCoreReady || fileQueue.length === 0) return;
-
       try {
         mergeBtn.disabled = true;
         progressContainer.classList.remove('hidden');
         outputCard.classList.add('hidden');
-        updateProgress(5, "Starting conversion...");
+        updateProgress(5, 'Starting conversion...');
 
         const { Core } = wvInstance;
         const masterDoc = await Core.PDFNet.PDFDoc.create();
@@ -389,8 +356,8 @@
           let subDoc = null;
 
           if (item.ext === 'pdf') {
-            const arrayBuffer = await item.file.arrayBuffer();
-            subDoc = await Core.PDFNet.PDFDoc.createFromBuffer(arrayBuffer);
+            const buf = await item.file.arrayBuffer();
+            subDoc = await Core.PDFNet.PDFDoc.createFromBuffer(buf);
           } else if (['docx', 'doc'].includes(item.ext)) {
             const pdfBuffer = await Core.officeToPDFBuffer(item.file, { extension: item.ext });
             subDoc = await Core.PDFNet.PDFDoc.createFromBuffer(pdfBuffer);
@@ -398,8 +365,8 @@
             subDoc = await Core.PDFNet.PDFDoc.create();
             await subDoc.initSecurityHandler();
             await subDoc.lock();
-            const imageBuffer = await item.file.arrayBuffer();
-            await Core.PDFNet.Convert.toPdf(subDoc, imageBuffer);
+            const imgBuf = await item.file.arrayBuffer();
+            await Core.PDFNet.Convert.toPdf(subDoc, imgBuf);
           }
 
           if (subDoc) {
@@ -409,19 +376,18 @@
           }
         }
 
-        updateProgress(90, "Saving compiled document...");
+        updateProgress(90, 'Saving compiled document...');
         const pdfData = await masterDoc.saveMemoryFromBuffer(Core.PDFNet.SDFDoc.SaveOptions.e_linearized);
         const blob = new Blob([pdfData], { type: 'application/pdf' });
         const pdfUrl = URL.createObjectURL(blob);
 
-        updateProgress(100, "Done!");
+        updateProgress(100, 'Done!');
         downloadBtn.href = pdfUrl;
         pdfPreview.src = pdfUrl;
         outputCard.classList.remove('hidden');
-
       } catch (error) {
-        console.error("Conversion error:", error);
-        alert("Error during conversion: " + (error.message || error));
+        console.error('Conversion error:', error);
+        alert('Error during conversion: ' + (error.message || error));
       } finally {
         mergeBtn.disabled = false;
         setTimeout(() => progressContainer.classList.add('hidden'), 1000);
