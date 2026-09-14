@@ -8,7 +8,7 @@
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Apryse WebViewer SDK (Universal UMD Bundle for Script Tags) -->
+  <!-- Apryse WebViewer UMD Script -->
   <script src="https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public/webviewer.min.js"></script>
 
   <style>
@@ -133,11 +133,13 @@
     const downloadBtn = document.getElementById('downloadBtn');
     const pdfPreview = document.getElementById('pdfPreview');
 
-    // 1. Initialize Apryse Headless Engine
-    window.addEventListener('DOMContentLoaded', () => {
-      WebViewer({
-        path: 'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public'
-      }, document.getElementById('viewer')).then(async (instance) => {
+    // 1. Initialize Apryse Headless Engine safely via global window check
+    async function initWebViewer() {
+      try {
+        const instance = await WebViewer({
+          path: 'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public'
+        }, document.getElementById('viewer'));
+
         wvInstance = instance;
         const { Core } = instance;
 
@@ -148,12 +150,14 @@
         statusText.textContent = "Apryse WASM Core Engine Ready";
         statusDot.className = "w-2 h-2 rounded-full bg-emerald-500";
         updateBtnState();
-      }).catch(err => {
+      } catch (err) {
         console.error("WASM Initialization Error:", err);
         statusText.textContent = "Error loading WASM Core";
         statusDot.className = "w-2 h-2 rounded-full bg-red-500";
-      });
-    });
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', initWebViewer);
 
     // 2. Prevent default browser drops globally
     window.addEventListener('dragover', (e) => e.preventDefault(), false);
