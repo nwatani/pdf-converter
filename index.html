@@ -5,6 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Apryse WASM - Multi-Format PDF Converter & Merger</title>
 
+  <!-- Content Security Policy (meta tag for GitHub Pages, which cannot set HTTP headers) -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net;
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' data: blob:;
+    font-src 'self' data: blob:;
+    connect-src 'self' blob: data: https://cdn.jsdelivr.net https://www.pdftron.com https://pws-collect.pdftron.com https://proxy.pdftron.com;
+    frame-src 'self' blob: https://cdn.jsdelivr.net;
+    worker-src 'self' blob:;
+  ">
+
   <!-- Inline favicon to prevent 404 on GitHub Pages -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📄</text></svg>">
 
@@ -158,11 +170,25 @@
     async function initWebViewer() {
       try {
         console.log("Starting WebViewer instantiation...");
+
+        const viewerContainer = document.getElementById('viewer');
+
+        // Watch for the WebViewer iframe and mark it credentialless so COEP allows it to load
+        const iframeObserver = new MutationObserver(() => {
+          const iframe = viewerContainer.querySelector('iframe');
+          if (iframe && !iframe.credentialless) {
+            iframe.credentialless = true;
+            console.log('[Fix] WebViewer iframe set to credentialless');
+            iframeObserver.disconnect();
+          }
+        });
+        iframeObserver.observe(viewerContainer, { childList: true, subtree: true });
+
         const instance = await WebViewer({
           path: 'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public',
           initialDoc: '',
           disabledElements: ['header']
-        }, document.getElementById('viewer'));
+        }, viewerContainer);
 
         wvInstance = instance;
         const { Core } = instance;
@@ -382,7 +408,8 @@
             subDoc = await Core.PDFNet.PDFDoc.create();
             await subDoc.initSecurityHandler();
             await subDoc.lock();
-            await Core.PDFNet.Convert.toPdf(subDoc, await item.file.arrayBuffer());
+            const imageBuffer = await item.file.arrayBuffer();
+            await Core.PDFNet.Convert.toPdf(subDoc, imageBuffer);
           }
 
           if (subDoc) {
