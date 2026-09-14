@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Apryse WASM - Multi-Format PDF Converter & Merger</title>
 
-  <!-- Content Security Policy (meta tag for GitHub Pages, which cannot set HTTP headers) -->
+  <!-- Content Security Policy -->
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
     script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdn.tailwindcss.com https://cdn.jsdelivr.net;
@@ -17,40 +17,13 @@
     worker-src 'self' blob:;
   ">
 
-  <!-- Inline favicon to prevent 404 on GitHub Pages -->
+  <!-- Inline favicon -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📄</text></svg>">
 
-  <!-- Cross-Origin Isolation Service Worker (REQUIRED for Apryse WASM threads on GitHub Pages) -->
-  <script>
-  // Only load the COI service worker on browsers that fully support credentialless iframes
-  // (Chrome, Edge, and Firefox 119+). Older Firefox versions will fall back to
-  // single-threaded WASM instead of being blocked by COEP.
-  (function() {
-    const ua = navigator.userAgent;
-    const isFirefox = /firefox\/\d+/i.test(ua);
-    let firefoxMajor = 0;
-    if (isFirefox) {
-      const m = ua.match(/firefox\/(\d+)/i);
-      if (m) firefoxMajor = parseInt(m[1], 10);
-    }
+  <!-- Direct script inclusion so coi-serviceworker can correctly resolve document.currentScript -->
+  <script src="coi-serviceworker.js"></script>
 
-    const shouldLoadCOI = !isFirefox || firefoxMajor >= 119;
-
-    if (shouldLoadCOI) {
-      const s = document.createElement('script');
-      s.src = 'coi-serviceworker.js';
-      document.head.appendChild(s);
-      console.log('[COI] Service worker enabled (cross-origin isolation active)');
-    } else {
-      console.warn(
-        '[COI] Firefox < 119 detected. Skipping service worker to avoid COEP blocking the WebViewer iframe.\n' +
-        'Apryse will run in single-threaded mode (slower but functional).'
-      );
-    }
-  })();
-</script>
-
-  <!-- Tailwind CSS (versioned Play CDN) -->
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com/3.4.16"></script>
 
   <style>
@@ -184,23 +157,15 @@
     const downloadBtn = document.getElementById('downloadBtn');
     const pdfPreview = document.getElementById('pdfPreview');
 
-    // 0. Report cross-origin isolation status (needed for WASM threads)
     console.log('[Env] crossOriginIsolated =', window.crossOriginIsolated);
-    if (!window.crossOriginIsolated) {
-      console.warn(
-        '[Env] Page is NOT cross-origin isolated. Apryse will run in single-thread mode.\n' +
-        'Make sure coi-serviceworker.js is present in the site root and the page reloads once after registration.'
-      );
-    }
 
-    // 1. Initialize Apryse Headless Engine with step logging
     async function initWebViewer() {
       try {
         console.log("Starting WebViewer instantiation...");
 
         const viewerContainer = document.getElementById('viewer');
 
-        // Watch for the WebViewer iframe and mark it credentialless so COEP allows it to load
+        // Watch for the WebViewer iframe and set credentialless for cross-origin isolation
         const iframeObserver = new MutationObserver(() => {
           const iframe = viewerContainer.querySelector('iframe');
           if (iframe && !iframe.credentialless) {
@@ -211,8 +176,10 @@
         });
         iframeObserver.observe(viewerContainer, { childList: true, subtree: true });
 
+        // Standard configuration using local public folder or CDN fallback
         const instance = await WebViewer({
           path: 'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public',
+          licenseKey: 'YOUR_APRYSE_LICENSE_KEY', // Replace with your Apryse key if applicable
           initialDoc: '',
           disabledElements: ['header']
         }, viewerContainer);
@@ -240,11 +207,11 @@
 
     initWebViewer();
 
-    // 2. Prevent default browser drops globally
+    // Prevent default browser drops globally
     window.addEventListener('dragover', (e) => e.preventDefault(), false);
     window.addEventListener('drop', (e) => e.preventDefault(), false);
 
-    // 3. Robust Dropzone Event Handlers
+    // Dropzone Event Handlers
     dropzone.addEventListener('dragenter', (e) => { e.preventDefault(); e.stopPropagation(); dropzone.classList.add('drag-over'); });
     dropzone.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); dropzone.classList.add('drag-over'); });
     dropzone.addEventListener('dragleave', (e) => { e.preventDefault(); e.stopPropagation(); dropzone.classList.remove('drag-over'); });
@@ -273,7 +240,6 @@
       renderQueue();
     });
 
-    // 4. File Queue Management & Sorting (Ascending/Descending support)
     function handleFiles(files) {
       const validExtensions = ['docx', 'doc', 'pdf', 'png', 'jpg', 'jpeg', 'webp'];
       Array.from(files).forEach(file => {
@@ -311,7 +277,6 @@
       });
     }
 
-    // Expose array mutation functions globally so HTML inline onclick handlers can access them
     window.moveUp = function(index) {
       if (index > 0) {
         sortSelect.value = 'custom';
@@ -339,7 +304,6 @@
       return 'bg-emerald-100 text-emerald-700 border-emerald-200';
     }
 
-    // Escape user-supplied filenames before injecting into innerHTML
     function escapeHtml(str) {
       return String(str)
         .replace(/&/g, '&amp;')
@@ -401,7 +365,7 @@
       mergeBtn.disabled = !isCoreReady || fileQueue.length === 0;
     }
 
-    // 5. WASM Conversion Pipeline
+    // WASM Conversion Pipeline
     mergeBtn.addEventListener('click', async () => {
       if (!isCoreReady || fileQueue.length === 0) return;
 
@@ -431,7 +395,6 @@
             const pdfBuffer = await Core.officeToPDFBuffer(item.file, { extension: item.ext });
             subDoc = await Core.PDFNet.PDFDoc.createFromBuffer(pdfBuffer);
           } else if (['png', 'jpg', 'jpeg', 'webp'].includes(item.ext)) {
-            // Convert an image into a single-page PDF document
             subDoc = await Core.PDFNet.PDFDoc.create();
             await subDoc.initSecurityHandler();
             await subDoc.lock();
