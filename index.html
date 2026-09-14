@@ -97,23 +97,20 @@
       <iframe id="pdfPreview" class="w-full h-[500px] border border-slate-200 rounded-lg bg-slate-100"></iframe>
     </div>
 
-    <div id="viewer" class="hidden"></div>
+    <!-- Viewer container: positioned OFF-SCREEN but with REAL dimensions.
+         The old `class="hidden"` (display:none) gave the iframe zero size,
+         which caused WebViewer to hang on initialization. -->
+    <div id="viewer" style="position: absolute; left: -9999px; top: 0; width: 1024px; height: 768px; pointer-events: none;"></div>
   </div>
 
-  <!-- ============================================================
-       CLEANUP: Unregister any leftover service workers from
-       previous versions of this page. Runs every load.
-       ============================================================ -->
+  <!-- Cleanup: unregister any leftover service workers -->
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         if (regs.length > 0) {
           console.log('[Cleanup] Unregistering', regs.length, 'old service worker(s)...');
           Promise.all(regs.map(r => r.unregister())).then(() => {
-            console.log('[Cleanup] Done. Page will now reload to escape cross-origin isolation.');
-            if (window.crossOriginIsolated) {
-              window.location.reload();
-            }
+            if (window.crossOriginIsolated) window.location.reload();
           });
         } else {
           console.log('[Cleanup] No service workers registered. Clean.');
@@ -167,7 +164,6 @@
             path: 'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public',
             initialDoc: '',
             disabledElements: ['header'],
-            // Force single-threaded WASM — no COI needed, works on GitHub Pages out of the box
             backendType: 'ems'
           },
           viewerContainer
