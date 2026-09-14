@@ -5,8 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Apryse WASM - Multi-Format PDF Converter & Merger</title>
 
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Inline favicon to prevent 404 on GitHub Pages -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📄</text></svg>">
+
+  <!-- Cross-Origin Isolation Service Worker (REQUIRED for Apryse WASM threads on GitHub Pages) -->
+  <script src="coi-serviceworker.js"></script>
+
+  <!-- Tailwind CSS (versioned Play CDN) -->
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
 
   <style>
     .drag-over {
@@ -51,7 +57,7 @@
         <h2 class="text-sm font-semibold text-slate-700 uppercase tracking-wider">
           Files Queue (<span id="fileCount">0</span>)
         </h2>
-        
+
         <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
           <div class="flex items-center gap-1.5 text-xs text-slate-500">
             <span>Sort by:</span>
@@ -139,6 +145,15 @@
     const downloadBtn = document.getElementById('downloadBtn');
     const pdfPreview = document.getElementById('pdfPreview');
 
+    // 0. Report cross-origin isolation status (needed for WASM threads)
+    console.log('[Env] crossOriginIsolated =', window.crossOriginIsolated);
+    if (!window.crossOriginIsolated) {
+      console.warn(
+        '[Env] Page is NOT cross-origin isolated. Apryse will run in single-thread mode.\n' +
+        'Make sure coi-serviceworker.js is present in the site root and the page reloads once after registration.'
+      );
+    }
+
     // 1. Initialize Apryse Headless Engine with step logging
     async function initWebViewer() {
       try {
@@ -154,7 +169,7 @@
 
         console.log("Initializing PDFNet...");
         await Core.PDFNet.initialize();
-        
+
         console.log("Setting resource path...");
         Core.PDFNet.setResourcePath('https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public/core');
 
@@ -271,6 +286,16 @@
       return 'bg-emerald-100 text-emerald-700 border-emerald-200';
     }
 
+    // Escape user-supplied filenames before injecting into innerHTML
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     function renderQueue() {
       fileCountEl.textContent = fileQueue.length;
 
@@ -295,7 +320,7 @@
                 ${item.ext}
               </span>
               <div class="truncate">
-                <p class="text-sm font-medium text-slate-800 truncate">${item.name}</p>
+                <p class="text-sm font-medium text-slate-800 truncate">${escapeHtml(item.name)}</p>
                 <p class="text-xs text-slate-400">${item.size}</p>
               </div>
             </div>
@@ -353,8 +378,11 @@
             const pdfBuffer = await Core.officeToPDFBuffer(item.file, { extension: item.ext });
             subDoc = await Core.PDFNet.PDFDoc.createFromBuffer(pdfBuffer);
           } else if (['png', 'jpg', 'jpeg', 'webp'].includes(item.ext)) {
+            // Convert an image into a single-page PDF document
             subDoc = await Core.PDFNet.PDFDoc.create();
-            await Core.PDFNet.Convert.toPdf(subDoc, item.file);
+            await subDoc.initSecurityHandler();
+            await subDoc.lock();
+            await Core.PDFNet.Convert.toPdf(subDoc, await item.file.arrayBuffer());
           }
 
           if (subDoc) {
@@ -376,7 +404,7 @@
 
       } catch (error) {
         console.error("Conversion error:", error);
-        alert("Error during conversion: " + error.message);
+        alert("Error during conversion: " + (error.message || error));
       } finally {
         mergeBtn.disabled = false;
         setTimeout(() => progressContainer.classList.add('hidden'), 1000);
