@@ -8,9 +8,6 @@
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Apryse WebViewer UMD Script -->
-  <script src="https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public/webviewer.min.js"></script>
-
   <style>
     .drag-over {
       border-color: #3b82f6 !important;
@@ -112,7 +109,10 @@
     <div id="viewer" class="hidden"></div>
   </div>
 
-  <script>
+  <!-- Application Logic (ES Module) -->
+  <script type="module">
+    import WebViewer from 'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/+esm';
+
     let fileQueue = [];
     let wvInstance = null;
     let isCoreReady = false;
@@ -133,11 +133,13 @@
     const downloadBtn = document.getElementById('downloadBtn');
     const pdfPreview = document.getElementById('pdfPreview');
 
-    // 1. Initialize Apryse Headless Engine safely via global window check
+    // 1. Initialize Apryse Headless Engine
     async function initWebViewer() {
       try {
         const instance = await WebViewer({
-          path: 'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public'
+          path: 'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public',
+          initialDoc: '',
+          disabledElements: ['header']
         }, document.getElementById('viewer'));
 
         wvInstance = instance;
@@ -157,7 +159,7 @@
       }
     }
 
-    window.addEventListener('DOMContentLoaded', initWebViewer);
+    initWebViewer();
 
     // 2. Prevent default browser drops globally
     window.addEventListener('dragover', (e) => e.preventDefault(), false);
@@ -217,7 +219,8 @@
       }
     }
 
-    function moveUp(index) {
+    // Expose array mutation functions globally so HTML inline onclick handlers can access them
+    window.moveUp = function(index) {
       if (index > 0) {
         sortSelect.value = 'custom';
         [fileQueue[index], fileQueue[index - 1]] = [fileQueue[index - 1], fileQueue[index]];
@@ -225,7 +228,7 @@
       }
     }
 
-    function moveDown(index) {
+    window.moveDown = function(index) {
       if (index < fileQueue.length - 1) {
         sortSelect.value = 'custom';
         [fileQueue[index], fileQueue[index + 1]] = [fileQueue[index + 1], fileQueue[index]];
@@ -233,7 +236,7 @@
       }
     }
 
-    function removeFile(index) {
+    window.removeFile = function(index) {
       fileQueue.splice(index, 1);
       renderQueue();
     }
@@ -274,13 +277,13 @@
             </div>
 
             <div class="flex items-center gap-1">
-              <button onclick="moveUp(${index})" ${index === 0 ? 'disabled' : ''} class="p-1.5 text-slate-500 hover:text-blue-600 disabled:opacity-30 rounded hover:bg-slate-100" title="Move Up">
+              <button type="button" onclick="window.moveUp(${index})" ${index === 0 ? 'disabled' : ''} class="p-1.5 text-slate-500 hover:text-blue-600 disabled:opacity-30 rounded hover:bg-slate-100" title="Move Up">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
               </button>
-              <button onclick="moveDown(${index})" ${index === fileQueue.length - 1 ? 'disabled' : ''} class="p-1.5 text-slate-500 hover:text-blue-600 disabled:opacity-30 rounded hover:bg-slate-100" title="Move Down">
+              <button type="button" onclick="window.moveDown(${index})" ${index === fileQueue.length - 1 ? 'disabled' : ''} class="p-1.5 text-slate-500 hover:text-blue-600 disabled:opacity-30 rounded hover:bg-slate-100" title="Move Down">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
               </button>
-              <button onclick="removeFile(${index})" class="p-1.5 text-slate-400 hover:text-red-600 rounded hover:bg-red-50 ml-1" title="Remove">
+              <button type="button" onclick="window.removeFile(${index})" class="p-1.5 text-slate-400 hover:text-red-600 rounded hover:bg-red-50 ml-1" title="Remove">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
               </button>
             </div>
