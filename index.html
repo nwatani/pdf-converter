@@ -115,10 +115,11 @@
     <div id="viewer" class="hidden"></div>
   </div>
 
-  <!-- Load WebViewer via classic script tag (more reliable than ESM import) -->
-  <script src="https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/public/webviewer.min.js"></script>
+  <!-- Application Logic (ES Module) -->
+  <script type="module">
+    import WebViewerModule from 'https://cdn.jsdelivr.net/npm/@pdftron/webviewer@10.9.0/+esm';
+    const WebViewer = WebViewerModule.default || WebViewerModule;
 
-  <script>
     // ---- App state ----
     let fileQueue = [];
     let wvInstance = null;
@@ -144,13 +145,14 @@
 
     // ---- Log environment ----
     console.log('[Env] crossOriginIsolated =', window.crossOriginIsolated);
+    console.log('[Env] WebViewer global =', typeof WebViewer);
     console.log('[Env] User agent =', navigator.userAgent);
 
     // ---- Initialize Apryse ----
     async function initWebViewer() {
       try {
-        if (typeof WebViewer === 'undefined') {
-          throw new Error('WebViewer failed to load from CDN. Check your network or CSP.');
+        if (typeof WebViewer !== 'function') {
+          throw new Error('WebViewer module did not load from CDN.');
         }
 
         console.log('Starting WebViewer instantiation...');
