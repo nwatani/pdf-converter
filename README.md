@@ -1,6 +1,5 @@
 # pdf-converter
 PDF Converter Tool
-
 Convert, merge, and compress your files into optimized PDF documents.
 
 Supported File Formats
@@ -15,6 +14,7 @@ Text Files: .txt
 Structured Data: .json, .xml
 Log Files: .log
 Images: .png, .jpg, .webp, .svg
+
 Key Features
 Convert to PDF — Convert supported file formats into PDF.
 Merge Files — Combine multiple files and different file types into a single PDF document.
